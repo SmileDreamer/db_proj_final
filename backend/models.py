@@ -194,6 +194,7 @@ class MetaTable(database.Model):
 # connection sets
 class FileDir(database.Model):
     __tablename__ = "file_dir"
+    id = database.Column(database.Integer, primary_key=True)
     dir_id = database.Column(database.Integer, database.ForeignKey(Directory.dir_id, ondelete="CASCADE"))
     file_hash = database.Column(database.String(256), database.ForeignKey(File.file_hash, ondelete="CASCADE"))
 
@@ -208,6 +209,7 @@ class FileDir(database.Model):
 
 class UserRole(database.Model):
     __tablename__ = "user_role"
+    id = database.Column(database.Integer, primary_key=True)
     user_id = database.Column(database.Integer, database.ForeignKey(User.user_id, ondelete="CASCADE"))
     role_id = database.Column(database.Integer, database.ForeignKey(Role.role_id, ondelete="CASCADE"))
 
@@ -222,6 +224,7 @@ class UserRole(database.Model):
 
 class GroupRole(database.Model):
     __tablename__ = "group_role"
+    id = database.Column(database.Integer, primary_key=True)
     group_id = database.Column(database.Integer, database.ForeignKey(Group.group_id, ondelete="CASCADE"))
     role_id = database.Column(database.Integer, database.ForeignKey(Role.role_id, ondelete="CASCADE"))
 
@@ -236,8 +239,9 @@ class GroupRole(database.Model):
 
 class UserGroup(database.Model):
     __tablename__ = "user_group"
+    id = database.Column(database.Integer, primary_key=True)
     group_id = database.Column(database.Integer, database.ForeignKey(Group.group_id, ondelete="CASCADE"))
-    user_id = database.Column(database.Integer, database.ForeignKey(User.role_id, ondelete="CASCADE"))
+    user_id = database.Column(database.Integer, database.ForeignKey(User.user_id, ondelete="CASCADE"))
 
     # create relationships
     user = database.relationship(User, backref=database.backref("user_group", passive_deletes=True))

@@ -1,27 +1,22 @@
-import os
-import sys
 import json
-from werkzeug.serving import make_server
-from flask import Flask, session, request, jsonify, redirect
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, request, jsonify, redirect
 
-from .api import file, manage
-from .models import *
-from .misc import validate_request
-from ..utils import code, logger
-
+from backend.api import file, manage
+from backend.models import *
+from backend.misc import validate_request
+from backend.utils import code
 
 app = Flask(__name__)
-# set this outside of app module
-# app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+mysqldatabase://192.168.5.2"
-database.init_app(app)
+
+def app_init():
+    database.init_app(app)
 
 @app.route("/data")
-def app_data_protect()
+def app_data_protect():
     return redirect("/login")
 
 @app.route("/data/<path>")
-def app_data_protect2()
+def app_data_protect2():
     return redirect("/login")
 
 @app.route("/")

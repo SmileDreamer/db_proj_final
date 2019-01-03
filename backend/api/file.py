@@ -1,8 +1,7 @@
 from flask import jsonify, send_from_directory, current_app
 from hashlib import sha256
-from ..models import *
-from ..misc import *
-from ..http import code, logger
+from backend.misc import *
+from backend.utils import code
 import os
 import string
 
