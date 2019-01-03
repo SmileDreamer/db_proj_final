@@ -10,6 +10,28 @@ app = Flask(__name__)
 
 def app_init():
     database.init_app(app)
+    app.app_context().push()
+    database.create_all(app=app)
+    database.get_engine(app=app).execute("""
+        CREATE OR REPLACE TRIGGER update_file_ref_inc
+        AFTER INSERT ON file_dir
+        FOR EACH ROW
+        BEGIN
+            UPDATE file SET file.file_ref_count = file.file_ref_count + 1
+            WHERE file.file_hash = file_dir.file_hash;
+        END
+    """)
+    database.get_engine(app=app).execute("""
+        CREATE OR REPLACE TRIGGER update_file_ref_dec
+        AFTER DELETE ON file_dir
+        FOR EACH ROW
+        BEGIN
+            UPDATE file SET file.file_ref_count = file.file_ref_count - 1
+            WHERE file.file_hash = file_dir.file_hash;
+        END
+
+    """)
+    database.session.commit()
 
 @app.route("/data")
 def app_data_protect():

@@ -5,26 +5,6 @@ import base64
 import datetime
 
 database = SQLAlchemy()
-"""
-    CREATE OR REPLACE TRIGGER update_file_ref_inc
-    AFTER INSERT ON file_dir
-    FOR EACH ROW
-    BEGIN
-        UPDATE file SET file.file_ref_count = file.file_ref_count + 1
-        WHERE file.file_hash = file_dir.file_hash
-    END
-
-
-    CREATE OR REPLACE TRIGGER update_file_ref_dec
-    AFTER DELETE ON file_dir
-    FOR EACH ROW
-    BEGIN
-        UPDATE file SET file.file_ref_count = file.file_ref_count - 1
-        WHERE file.file_hash = file_dir.file_hash
-    END
-
-"""
-
 
 class User(database.Model):
     __tablename__ = "user"
