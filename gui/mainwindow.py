@@ -7,6 +7,11 @@
 # WARNING! All changes made in this file will be lost!
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QWidget, QLineEdit, QMessageBox
+from PyQt5.QtCore import QRegExp
+from PyQt5.QtGui import QRegExpValidator
+import requests
+import json
 
 class MainWindow(QtWidgets.QWidget):
 
@@ -20,11 +25,13 @@ class MainWindow(QtWidgets.QWidget):
         self.pushButton = QtWidgets.QPushButton(self.centralwidget)
         self.pushButton.setGeometry(QtCore.QRect(910, 10, 93, 31))
         self.pushButton.setObjectName("pushButton")
+        self.pushButton.clicked.connect(self.get_list_from_dir)
 
         # 目录
-        self.textEdit = QtWidgets.QTextEdit(self.centralwidget)
-        self.textEdit.setGeometry(QtCore.QRect(20, 10, 881, 31))
-        self.textEdit.setObjectName("textEdit")
+        self.dirEdit = QtWidgets.QLineEdit(self.centralwidget)
+        self.dirEdit.setGeometry(QtCore.QRect(20, 10, 881, 31))
+        self.dirEdit.setObjectName("textEdit")
+        self.dirEdit.setText("/user/root")
 
         # 文件列表
         self.listView = QtWidgets.QListWidget(self.centralwidget)
@@ -51,6 +58,30 @@ class MainWindow(QtWidgets.QWidget):
         _translate = QtCore.QCoreApplication.translate
         Dialog.setWindowTitle(_translate("Dialog", "MainWindow"))
         self.pushButton.setText(_translate("Dialog", "进入"))
-        self.textEdit.setWhatsThis(_translate("Dialog", "<html><head/><body><p>目录</p></body></html>"))
+        self.dirEdit.setWhatsThis(_translate("Dialog", "<html><head/><body><p>目录</p></body></html>"))
         self.listView.setWhatsThis(_translate("Dialog", "<html><head/><body><p>文件列表</p></body></html>"))
+
+    def setToken(self, token):
+        self.token = token
+
+    def get_list_from_dir(self):
+        current_dir = self.dirEdit.text()
+        files = [
+            ('json', ("action", json.dumps({
+                "action": "read_dir",
+                "token": self.token,
+                "param":
+                    {"dir_root": current_dir,
+                     "dir_read_offset": 0,
+                     "dir_read_num": 999}}),
+            'application/json'))
+        ]
+        r = requests.post("http://172.18.95.74:8002/file", files=files)
+        contect = json.loads(r.content)
+        if contect['status'] != 0:
+            QMessageBox.warning(self, "错误", "无法打开该文件夹！", QMessageBox.Yes)
+            return
+        self.listView.clear()
+        for _name in contect['data']['entries']:
+            self.listView.addItem(_name)
 

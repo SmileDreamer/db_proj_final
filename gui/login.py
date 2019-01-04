@@ -6,13 +6,9 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QWidget, QLineEdit, QMessageBox
-from PyQt5.QtCore import QRegExp
-from PyQt5.QtGui import QRegExpValidator
 from gui.mainwindow import *
-import requests
-import json
+# requests import from mainwindow
+# json import from mainwindow
 
 class Loginwindow(QtWidgets.QWidget):
     def __init__(self):
@@ -89,18 +85,22 @@ class Loginwindow(QtWidgets.QWidget):
             QMessageBox.warning(self, "错误", "用户名或密码为空！", QMessageBox.Yes)
             return
         files = [
-            ('json', ("action", json.dumps({"action": "login", "param": {"username": name, "password": password}}),
-                      'application/json'))
+            ('json', ("action", json.dumps({"action": "login", "param": {"username": name, "password": password}}),'application/json'))
         ]
         #登陆处理
         try:
             r = requests.post("http://172.18.95.74:8002/login", files=files)
-            contect = r.content
-
+            contect = json.loads(r.content)
             # 登陆成功
-            self.hide()
+            if contect['status'] != 0:
+                QMessageBox.warning(self, "错误", "用户名或密码错误，登陆失败！", QMessageBox.Yes)
+                return
+            token = contect['data']['token']
 
+            self.hide()
             self.new_ui = MainWindow()
+            self.new_ui.setToken(token)
+            self.new_ui.get_list_from_dir()
             self.new_ui.show()
 
         except Exception as err:
