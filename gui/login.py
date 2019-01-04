@@ -10,15 +10,15 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QWidget, QLineEdit, QMessageBox
 from PyQt5.QtCore import QRegExp
 from PyQt5.QtGui import QRegExpValidator
-from flask import Flask
+from gui.mainwindow import *
 import requests
 import json
 
-class Ui_MainWindow(QtWidgets.QWidget):
+class Loginwindow(QtWidgets.QWidget):
     def __init__(self):
-        super(Ui_MainWindow, self).__init__()
+        super(Loginwindow, self).__init__()
         #self.setupUi(self)
-        self.setObjectName("MainWindow")
+        self.setObjectName("Login")
         self.resize(452, 350)
         self.centralwidget = QtWidgets.QWidget(self)
         self.centralwidget.setObjectName("centralwidget")
@@ -74,7 +74,7 @@ class Ui_MainWindow(QtWidgets.QWidget):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "Login"))
         self.pushButton.setText(_translate("MainWindow", "登陆"))
         self.pushButton_2.setText(_translate("MainWindow", "注册"))
         self.label.setText(_translate("MainWindow", "用户名"))
@@ -84,7 +84,7 @@ class Ui_MainWindow(QtWidgets.QWidget):
         name = self.textEdit.text()
         password = self.textEdit_2.text()
         # username, password你的用户名和密码
-        print("[DEBUG]Login with name %s and password %s"%(name, password))
+        print("[DEBUG]Login with name [%s] and password [%s]"%(name, password))
         if (len(name) == 0 or len(password) == 0):
             QMessageBox.warning(self, "错误", "用户名或密码为空！", QMessageBox.Yes)
             return
@@ -94,13 +94,17 @@ class Ui_MainWindow(QtWidgets.QWidget):
         ]
         #登陆处理
         try:
-            r = requests.post("http://172.18.95.74:8002/login", files=files)
-            contect = r.content
+            #r = requests.post("http://172.18.95.74:8002/login", files=files)
+            #contect = r.content
+
+            # 登陆成功
+            self.hide()
+
+            self.new_ui = MainWindow()
+            self.new_ui.show()
+
         except Exception as err:
             print(format(err))
-        #登陆处理
-        pass
 
     def register(self):
         print("Register")
-        pass

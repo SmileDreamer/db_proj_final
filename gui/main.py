@@ -9,7 +9,9 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    login_window = login.Ui_MainWindow()
+    login_window = login.Loginwindow()
     #login_window_2 = QtWidgets.QMainWindow()
+
     login_window.show()
-    sys.exit(app.exec_())
+    app.exec_()
+    sys.exit(999)
