@@ -13,5 +13,4 @@ if __name__ == '__main__':
     #login_window_2 = QtWidgets.QMainWindow()
 
     login_window.show()
-    app.exec_()
-    sys.exit(999)
+    sys.exit(app.exec_())

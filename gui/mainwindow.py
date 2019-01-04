@@ -44,9 +44,19 @@ class MainWindow(QtWidgets.QWidget):
 
         # 文件属性
         self.FileElement = QtWidgets.QTextEdit(self.centralwidget)
-        self.FileElement.setGeometry(QtCore.QRect(800, 60, 201, 681))
+        self.FileElement.setGeometry(QtCore.QRect(800, 60, 201, 601))
         self.FileElement.setObjectName("textEdit_2")
-        self.FileElement.setEnabled(False) # 禁止选定，从而避免编辑
+        #self.FileElement.setEnabled(False) # 禁止选定，从而避免编辑
+
+        # 下载按钮
+        self.download_button = QtWidgets.QPushButton(self.centralwidget)
+        self.download_button.setGeometry(QtCore.QRect(800, 670, 191, 31))
+        self.download_button.setObjectName("pushButton_2")
+
+        # 上传按钮
+        self.upload_button = QtWidgets.QPushButton(self.centralwidget)
+        self.upload_button.setGeometry(QtCore.QRect(800, 710, 191, 31))
+        self.upload_button.setObjectName("pushButton_3")
 
         self.retranslateUi(self)
         QtCore.QMetaObject.connectSlotsByName(self)
@@ -57,6 +67,8 @@ class MainWindow(QtWidgets.QWidget):
         self.pushButton.setText(_translate("Dialog", "进入"))
         self.dirEdit.setWhatsThis(_translate("Dialog", "<html><head/><body><p>目录</p></body></html>"))
         self.listView.setWhatsThis(_translate("Dialog", "<html><head/><body><p>文件列表</p></body></html>"))
+        self.download_button.setText(_translate("Dialog", "下载文件"))
+        self.upload_button.setText(_translate("Dialog", "上传文件"))
 
     def setToken(self, token):
         self.token = token
