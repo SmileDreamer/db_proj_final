@@ -10,6 +10,9 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QWidget, QLineEdit
 from PyQt5.QtCore import QRegExp
 from PyQt5.QtGui import QRegExpValidator
+from flask import Flask
+import requests
+import json
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -31,7 +34,7 @@ class Ui_MainWindow(object):
         self.textEdit_2.setFont(font)
         self.textEdit_2.setObjectName("textEdit_2")
         self.textEdit_2.setEchoMode(QLineEdit.Password)
-        regx = QRegExp("^[a-zA-Z][0-9A-Za-z]{14}$")  # 为给定的模式字符串构造一个正则表达式对象。
+        regx = QRegExp("^[0-9A-Za-z]{15}$")  # 为给定的模式字符串构造一个正则表达式对象。
         # 构造一个验证器，该父对象接受与正则表达式匹配的所有字符串。这里的父对象就是QLineEdit对象了。匹配是针对整个字符串; 例如：如果正则表达式是[A-Fa-f0-9]+将被视为^[A-Fa-f0-9]+$。
         validator = QRegExpValidator(regx, self.textEdit_2)
         # 将密码输入框设置为仅接受符合验证器条件的输入。 这允许您对可能输入的文本设置任何约束条件。因此我们这里设置的就是符合上面描述的三种约束条件。
@@ -78,10 +81,19 @@ class Ui_MainWindow(object):
     def login(self):
         name = self.textEdit.toPlainText()
         password = self.textEdit_2.text()
+        # username, password你的用户名和密码
         print("[DEBUG]Login with name %s and password %s"%(name, password))
-        ''''''
+        files = [
+            ('json', ("action", json.dumps({"action": "login", "param": {"username": name, "password": password}}),
+                      'application/json'))
+        ]
         #登陆处理
-        ''''''
+        try:
+            r = requests.post("http://172.18.95.74:8002/login", files=files)
+            contect = r.content
+        except Exception as err:
+            print(format(err))
+        #登陆处理
         pass
 
     def register(self):

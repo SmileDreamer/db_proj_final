@@ -7,14 +7,40 @@
 文件版本控制
 ### http api
 ---
+#####基本格式
+用户端向服务端发送multipart form,该form中目前可以包含:
+json: json部分, 名字目前只用到action
+file: 二进制file部分 (目前只有upload_file用到)
+服务器端在不同情况下会返回json或二进制文件(read_file函数)
+
+下面的示例使用了**requests**库
+客户端请求示例如下
+```python
+files = [
+    ('json', ("action", json.dumps({"action": "login", "param": {"username": "root", "password": "root"}}), 'application/json'))
+]
+r = requests.post("http://127.0.0.1:8002/login", files=files)
+print(r.content)
+```
+另一个上传文件的示例如下
+```python
+files = [
+    ('file', ('paper-othello.pdf', open("/home/Administrator/iffi/Projects/DB/proj_final/test_data/paper-othello.pdf", 'rb'), 'application/octet')),
+    ('json', ('action', json.dumps({"action": "upload_file", "token": "cm9vdDphMTQ0YTYyZDJiMTQwNTUxOWQ1ZTNmY2ZkZTVjYmRjNGUxNDAzOGE5MDZmN2M2ZmExMDhmNjRkZTk3MzNkOTIx",
+                                      "param": {"dir_root": "/user/root", "file_name": "paper-othello.pdf"}}), 'application/json')),
+]
+
+r = requests.post("http://127.0.0.1:8002/upload_file", files=files)
+print(r.content)
+```
 #####用户登录 /login: 
 ```
- C->S http digest login
+ C->S json action {"action": "login", "param":{"username":"", "password":""}}
  C<-S json result 200/401 + {info: "...",  token:"..."}
 ```
 解释:
-client 向 server发起http登录请求, 使用基础的http digest认证
-server向client返回状态码+json信息,  登录失败返回401, 登录成功返回200, info表示人类可读状态, token为以后任何操作使用的token
+client 向 server发起http登录请求
+server向client返回状态码+json信息,  如果发送的请求非有效json, 返回400, 登录失败返回401, 登录成功返回200, info表示人类可读状态, token为以后任何操作使用的token
 ---
 ##### 文件操作 /file:
 ```
@@ -35,39 +61,53 @@ dir_read_num: 要读取的文件项的数目, 为大于0的值, 超过实际有�
 S<-C data={"dir_root": <string>, "dir_read_num": <int>, "dir_read_offset": <int>, "real_read_num": <int>, "entries": [文件名数组]}
 如果权限不足, status为ST_USER_NOT_ALLOWED
 如果读取的dir_root非法, status值为ST_INVALID_DIR,
-如果dir_read_offset或dir_read_num非法, status值为ST_INVALID_VALUE
+如果dir_read_offset(小于0或超出最大值)或dir_read_num(小于0)非法, status值为ST_INVALID_VALUE
 成功则ST_OK
 
 ```
 ```
-C->S action="del_dir" param={"dir_root": <string>}
-S<-C data={"dir_root": <string>}
+C->S action="del_dir" param={"dir_root": <string>, "dir_name":<string>}
+S<-C data={"dir_root": <string>, "dir_name":<string>}
 如果权限不足, status为ST_USER_NOT_ALLOWED
+如果dir_root或dir_name非法, status值为ST_INVALID_DIR,
 否则status为ST_OK
 ```
 ```
-C->S action="mv_dir" param={"dir_root": <string>, "dest_root": <string>}
+# 因为权限管理问题, 目前不支持
+C->S action="mv_dir" param={"dir_root": <string>, "dir_name":<string>, "dest_root": <string>, "dest_name": <string>}
 S<-C data={"dir_root": <string>, "dir_name":<string>, "dest_root": <string>, "dest_name": <string>}
 如果权限不足, status为ST_USER_NOT_ALLOWED
 如果dir_root或dir_name或dest_root非法, status值为ST_INVALID_DIR
-如果dest_name非法(目标已存在, 文件名有不合法字符...), status值为ST_INVALID_VALUE
+如果dest_name非法(目标已存在, 文件名有不合法字符...), status值为ST_INVALID_DIR
 否则status为ST_OK
 
 eg: dir_root="/user/2016/" dir_name="books" dest_root="/group/2018/documents/" dest_name="books"
 ```
 ```
+C->S action="create_dir" param={"dir_root": <string>, "dir_name":<string>}
+S<-C data={"dir_root": <string>, "dir_name":<string>}
+如果权限不足, status为ST_USER_NOT_ALLOWED
+如果dir_root非法, status值为ST_INVALID_DIR
+如果dir_name非法(目标已存在, 文件名有不合法字符...), status值为ST_INVALID_DIR
+否则status为ST_OK
+
+eg: dir_root="/user/2016/" dir_name="books" dest_root="/group/2018/documents/" dest_name="books"
+```
+```
+# 因为权限管理问题, 目前不支持
+C->S action="copy_dir", param={"dir_root": <string>, "dir_name": <string>,"dest_root": <string>, "dest_name": <string>}
+S<-C data=param(和用户请求param一致)
+如果权限不足, status为ST_USER_NOT_ALLOWED
+如果dir_root或dir_name或dest_root非法, status值为ST_INVALID_DIR
+如果dest_name非法(目标已存在, 文件名有不合法字符...), status值为ST_INVALID_DIR
+否则status为ST_OK
+```
+```
 C->S action="read_file" param={"dir_root": <string>, "file_name": <string>}
-S<-C data={"dir_root": <string>, "filename": <string>, "url": <string>}
 如果权限不足, status为ST_USER_NOT_ALLOWED
 如果dir_root非法, status值为ST_INVALID_DIR
 如果file_name非法, status值为ST_INVALID_FILE
-否则status为ST_OK
-url表示下载链接, 可以直接访问, 需要token
-
-eg: dir_root="/user/2016/books" file_name="test.pdf"
-返回: url="static1.xxx.com/w3/file_dl/test.pdf
-用户: GET static1.xxx.com/w3/file_dl/test.pdf?token=...
-返回: 文件
+否则直接返回文件
 ```
 ```
 C->S action="del_file" param={"dir_root": <string>, "file_name": <string>}
@@ -83,7 +123,7 @@ S<-C data=param(和用户请求param一致)
 如果权限不足, status为ST_USER_NOT_ALLOWED
 如果dir_root或dest_root非法, status值为ST_INVALID_DIR
 如果file_name非法, status值为ST_INVALID_FILE
-如果dest_name非法(目标已存在, 文件名有不合法字符...), status值为ST_INVALID_VALUE
+如果dest_name非法(目标已存在, 文件名有不合法字符...), status值为ST_INVALID_FILE
 否则status为ST_OK
 ```
 ```
@@ -92,25 +132,21 @@ S<-C data=param(和用户请求param一致)
 如果权限不足, status为ST_USER_NOT_ALLOWED
 如果dir_root或dest_root非法, status值为ST_INVALID_DIR
 如果file_name非法, status值为ST_INVALID_FILE
-如果dest_name非法, status值为ST_INVALID_VALUE
+如果dest_name非法, status值为ST_INVALID_FILE
 否则status为ST_OK
 ```
 ```
 C->S action="upload_file", param={"dir_root": <string>, "file_name": <string>}
-S<-C data={"dir_root": <string>, "file_name": <string>, "url": <string>}
+	 file=<any file>
+S<-C data={"dir_root": <string>, "file_name": <string>}
 如果权限不足, status为ST_USER_NOT_ALLOWED
 如果dir_root非法, status值为ST_INVALID_DIR
 如果file_name非法, status值为ST_INVALID_FILE
 否则status为ST_OK
-url表示上传链接, 可以直接访问, 需要token
-
-eg: dir_root="/user/2016/books" file_name="test.pdf"
-返回: url="static1.xxx.com/w3/file_up
-用户: POST /file_up?token=... + 文件
 ```
 ```
-C->S action="read_meta", param={"dir_root": <string>, "file_name": <string>, "meta_read_offset":<int>, "meta_read_num":<int>}
-S<-C data={"dir_root": <string>, "file_name": <string>, "meta_read_offset": <int>, "real_read_num": <int>, "meta": {键:值}}
+C->S action="read_meta", param={"dir_root": <string>, "file_name": <string>}
+S<-C data={"dir_root": <string>, "file_name": <string>, "meta": {键:值}}
 如果权限不足, status为ST_USER_NOT_ALLOWED
 如果dir_root非法, status值为ST_INVALID_DIR
 如果file_name非法, status值为ST_INVALID_FILE
@@ -118,20 +154,11 @@ S<-C data={"dir_root": <string>, "file_name": <string>, "meta_read_offset": <int
 否则status为ST_OK
 ```
 ```
-action="read_meta_val", param={"dir_root": <string>, "file_name": <string>, "meta_name": <string>}
-S<-C data={"dir_root": <string>, "file_name": <string>, "meta_name": <string>, "meta_val": <any>}
+action="set_meta", param={"dir_root": <string>, "file_name": <string>, "meta_key":<string>, "meta_val": <any>}
 如果权限不足, status为ST_USER_NOT_ALLOWED
 如果dir_root非法, status值为ST_INVALID_DIR
 如果file_name非法, status值为ST_INVALID_FILE
-如果meta_name非法, status值为ST_INVALID_META
-否则status为ST_OK
-```
-```
-action="set_meta_val", param={"dir_root": <string>, "file_name": <string>, "meta_name":<string>, "meta_val": <any>}
-如果权限不足, status为ST_USER_NOT_ALLOWED
-如果dir_root非法, status值为ST_INVALID_DIR
-如果file_name非法, status值为ST_INVALID_FILE
-如果meta_name非法, status值为ST_INVALID_META
+如果meta_key非法, status值为ST_INVALID_META
 如果meta_val非法, status值为ST_INVALID_VALUE
 否则status为ST_OK
 ```
