@@ -9,8 +9,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    ex = login.Ui_MainWindow()
-    w = QtWidgets.QMainWindow()
-    ex.setupUi(w)
-    w.show()
+    login_window = login.Ui_MainWindow()
+    login_window_2 = QtWidgets.QMainWindow()
+    login_window.setupUi(login_window_2)
+    login_window_2.show()
     sys.exit(app.exec_())
