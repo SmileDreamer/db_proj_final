@@ -1,4 +1,4 @@
-from flask import jsonify, send_from_directory, current_app
+from flask import jsonify, send_file, current_app
 from hashlib import sha256
 from backend.misc import *
 from backend.utils import code
@@ -13,7 +13,7 @@ def read_dir(request, db):
     :return:
     """
     if "token" not in request \
-            or not validate_request(request, "read_dir", {"dir_root": str, "dir_read_offset": int, "dir_read_num": int})\
+            or not validate_request(request, "read_dir", {"dir_root": str, "dir_read_offset": int, "dir_read_num": int}) \
             or request["param"]["dir_read_offset"] < 0 or request["param"]["dir_read_num"] <= 0:
         resp = jsonify({"status": code.ST_INVALID_VALUE,
                         "info": "Request content is invalid",
@@ -44,8 +44,7 @@ def read_dir(request, db):
             if role.operate_dir_id == dir.dir_id:
                 if role.allow_read:
                     # query for file entries in target directory
-                    subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                    files = db.session.query(File).filter(File.file_hash.in_(subq)).all()
+                    files = FileDir.query.filter(FileDir.dir_id == dir.dir_id).all()
                     if len(files) < request["param"]["dir_read_offset"]:
                         resp = jsonify({"status": code.ST_INVALID_VALUE,
                                         "info": "Request read offset is too large",
@@ -59,7 +58,7 @@ def read_dir(request, db):
                             entries.append(files[i].file_name)
 
                         # query for directory entries in target directory, directory entries are always returned
-                        dirs = Directory.query(Directory.path).filter(Directory.dir_id == dir.dir_id).all()
+                        dirs = Directory.query.filter(Directory.parent_id == dir.dir_id).all()
                         for d in dirs:
                             entries.append(d.path)
                         resp = jsonify({"status": code.ST_OK,
@@ -93,8 +92,7 @@ def read_dir(request, db):
                 if role.operate_dir_id == dir.dir_id:
                     if role.allow_read:
                         # query for entries in target directory
-                        subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                        files = db.session.query(File).filter(File.file_hash.in_(subq)).all()
+                        files = FileDir.query.filter(FileDir.dir_id == dir.dir_id).all()
                         if len(files) < request["param"]["dir_read_offset"]:
                             resp = jsonify({"status": code.ST_INVALID_VALUE,
                                             "info": "Request read offset is too large",
@@ -108,10 +106,9 @@ def read_dir(request, db):
                                 entries.append(files[i].file_name)
 
                             # query for directory entries in target directory, directory entries are always returned
-                            dirs = Directory.query(Directory.path).filter(Directory.dir_id == dir.dir_id).all()
-                            if dirs is not None:
-                                for d in dirs:
-                                    entries.append(d.path)
+                            dirs = Directory.query.filter(Directory.parent_id == dir.dir_id).all()
+                            for d in dirs:
+                                entries.append(d.path)
 
                             resp = jsonify({"status": code.ST_OK,
                                             "info": "Request successful",
@@ -158,7 +155,8 @@ def del_dir(request, db):
         return resp
 
     # query for directory id
-    dir = Directory.query.filter_by(path=request["param"]["dir_root"] + "/" + request["param"]["dir_name"]).first()
+    parent_dir = Directory.query.filter_by(path=request["param"]["dir_root"]).first()
+    dir = Directory.query.filter_by(path=request["param"]["dir_root"]+"/"+request["param"]["dir_name"]).first()
     if dir is None:
         resp = jsonify({"status": code.ST_INVALID_DIR,
                         "info": "Directory is invalid",
@@ -170,10 +168,10 @@ def del_dir(request, db):
         # query for user roles
         roles = user.get_user_roles()
         for role in roles:
-            if role.operate_dir_id == dir.dir_id:
+            if role.operate_dir_id == parent_dir.dir_id:
                 if role.allow_delete:
                     # query for directories in target directory
-                    dirs = Directory.query(Directory.path).filter(Directory.parent_id == dir.dir_id).all()
+                    dirs = Directory.query.filter(Directory.parent_id == dir.dir_id).first()
                     if dirs is not None:
                         # currently, cascade deletion is not supported, user can only delete leaf nodes
                         resp = jsonify({"status": code.ST_INVALID_DIR,
@@ -207,10 +205,10 @@ def del_dir(request, db):
         for group in groups:
             roles = group.get_roles()
             for role in roles:
-                if role.operate_dir_id == dir.dir_id:
+                if role.operate_dir_id == parent_dir.dir_id:
                     if role.allow_delete:
                         # query for directories in target directory
-                        dirs = Directory.query(Directory.path).filter(Directory.parent_id == dir.dir_id).all()
+                        dirs = Directory.query.filter(Directory.parent_id == dir.dir_id).first()
                         if dirs is not None:
                             # currently, cascade deletion is not supported, user can only delete leaf nodes
                             resp = jsonify({"status": code.ST_INVALID_DIR,
@@ -286,7 +284,7 @@ def create_dir(request, db):
             if role.operate_dir_id == dir.dir_id:
                 if role.allow_insert:
                     # query for directories in target directory
-                    dirs = Directory.query(Directory.path).filter(Directory.dir_id == dir.dir_id).all()
+                    dirs = Directory.query.filter(Directory.parent_id == dir.dir_id).all()
                     if dirs is not None:
                         # check for duplicate directory
                         for d in dirs:
@@ -296,8 +294,14 @@ def create_dir(request, db):
                                                 "data": request["param"]})
                                 resp.status_code = 400
                                 return resp
-                    new_dir = Directory(new_path)
+                    new_dir = Directory(new_path, dir.dir_id)
                     db.session.add(new_dir)
+                    db.session.flush()
+                    # inherit permission from parent
+                    new_role = Role(role.role_name+"_"+request["param"]["dir_name"], new_dir.dir_id,
+                                    role.allow_insert, role.allow_read,
+                                    role.allow_modify, role.allow_delete)
+                    db.session.add(new_role)
                     db.session.commit()
                     resp = jsonify({"status": code.ST_OK,
                                     "info": "Request successful",
@@ -325,7 +329,7 @@ def create_dir(request, db):
                 if role.operate_dir_id == dir.dir_id:
                     if role.allow_insert:
                         # query for directories in target directory
-                        dirs = Directory.query(Directory.path).filter(Directory.dir_id == dir.dir_id).all()
+                        dirs = Directory.query.filter(Directory.parent_id == dir.dir_id).all()
                         if dirs is not None:
                             # check for duplicate directory
                             for d in dirs:
@@ -335,8 +339,14 @@ def create_dir(request, db):
                                                     "data": request["param"]})
                                     resp.status_code = 400
                                     return resp
-                        new_dir = Directory(new_path)
+                        new_dir = Directory(new_path, dir.dir_id)
                         db.session.add(new_dir)
+                        db.session.flush()
+                        # inherit permission from parent
+                        new_role = Role(role.role_name + "_" + request["param"]["dir_name"], new_dir.dir_id,
+                                        role.allow_insert, role.allow_read,
+                                        role.allow_modify, role.allow_delete)
+                        db.session.add(new_role)
                         db.session.commit()
                         resp = jsonify({"status": code.ST_OK,
                                         "info": "Request successful",
@@ -394,9 +404,8 @@ def read_file(request, db):
             if role.operate_dir_id == dir.dir_id:
                 if role.allow_read:
                     # query for file entries in target directory
-                    subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                    file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                          and File.file_name == request["param"]["file_name"]).all()
+                    file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                FileDir.file_name == request["param"]["file_name"]).first()
                     if file is None:
                         resp = jsonify({"status": code.ST_INVALID_FILE,
                                         "info": "Request file doesn't exist",
@@ -404,7 +413,9 @@ def read_file(request, db):
                         resp.status_code = 404
                         return resp
                     else:
-                        return send_from_directory("data", file.file_path)
+                        real_file = File.query.filter(File.file_hash == file.file_hash).first()
+                        return send_file(
+                            os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "uploads", real_file.file_path))
 
                 else:
                     resp = jsonify({"status": code.ST_USER_NOT_ALLOWED,
@@ -427,9 +438,8 @@ def read_file(request, db):
                 if role.operate_dir_id == dir.dir_id:
                     if role.allow_read:
                         # query for file entries in target directory
-                        subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                        file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                             and File.file_name == request["param"]["file_name"]).all()
+                        file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                    FileDir.file_name == request["param"]["file_name"]).first()
                         if file is None:
                             resp = jsonify({"status": code.ST_INVALID_FILE,
                                             "info": "Request file doesn't exist",
@@ -437,7 +447,9 @@ def read_file(request, db):
                             resp.status_code = 404
                             return resp
                         else:
-                            return send_from_directory("data", file.file_path)
+                            real_file = File.query.filter(File.file_hash == file.file_hash).first()
+                            return send_file(
+                                os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "uploads", real_file.file_path))
 
                     else:
                         resp = jsonify({"status": code.ST_USER_NOT_ALLOWED,
@@ -460,7 +472,7 @@ def del_file(request, db):
     :return:
     """
     if "token" not in request \
-            or not validate_request(request, "del_dir", {"dir_root": str, "file_name": str}):
+            or not validate_request(request, "del_file", {"dir_root": str, "file_name": str}):
         resp = jsonify({"status": code.ST_INVALID_VALUE,
                         "info": "Request content is invalid",
                         "data": {}})
@@ -490,14 +502,17 @@ def del_file(request, db):
             if role.operate_dir_id == dir.dir_id:
                 if role.allow_delete:
                     # query for file entries in target directory
-                    subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                    file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                         and File.file_name == request["param"]["file_name"]).first()
+                    subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id,
+                                                FileDir.file_name == request["param"]["file_name"]).subquery()
+                    file = db.session.query(File).filter(File.file_hash.in_(subq)).first()
                     if file is not None:
                         # TODO: Add atomic file clean up procedure when ref count has decreased to 0
                         if file.file_ref_count == 1:
-                            os.remove(os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "/data", file.file_path))
-                        relation = FileDir.query.filter(FileDir.file_hash == file.file_hash and
+                            real_file = File.query.filter(File.file_hash == file.file_hash).first()
+                            os.remove(
+                                os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "uploads", real_file.file_path))
+                            db.session.delete(real_file)
+                        relation = FileDir.query.filter(FileDir.file_hash == file.file_hash,
                                                         FileDir.dir_id == dir.dir_id).one()
                         db.session.delete(relation)
                         db.session.commit()
@@ -533,15 +548,19 @@ def del_file(request, db):
                 if role.operate_dir_id == dir.dir_id:
                     if role.allow_delete:
                         # query for file entries in target directory
-                        subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                        file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                             and File.file_name == request["param"][
-                                                                 "file_name"]).first()
+                        subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id,
+                                                                          FileDir.file_name == request["param"][
+                                                                              "file_name"]).subquery()
+                        file = db.session.query(File).filter(File.file_hash.in_(subq)).first()
                         if file is not None:
                             # TODO: Add atomic file clean up procedure when ref count has decreased to 0
                             if file.file_ref_count == 1:
-                                os.remove(os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "/data", file.file_path))
-                            relation = FileDir.query.filter(FileDir.file_hash == file.file_hash and
+                                real_file = File.query.filter(File.file_hash == file.file_hash).first()
+                                os.remove(
+                                    os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "uploads",
+                                                 real_file.file_path))
+                                db.session.delete(real_file)
+                            relation = FileDir.query.filter(FileDir.file_hash == file.file_hash,
                                                             FileDir.dir_id == dir.dir_id).one()
                             db.session.delete(relation)
                             db.session.commit()
@@ -612,8 +631,6 @@ def mv_file(request, db):
             if role.operate_dir_id == src_dir.dir_id:
                 src_allow_read = role.allow_read
                 src_allow_delete = role.allow_delete
-            elif role.operate_dir_id == dst_dir.dir_id:
-                dst_allow_insert = role.allow_insert
     elif request["param"]["dir_root"].startswith("/group"):
         # query for user group roles
         groups = user.get_groups()
@@ -623,22 +640,31 @@ def mv_file(request, db):
                 if role.operate_dir_id == src_dir.dir_id:
                     src_allow_read = role.allow_read
                     src_allow_delete = role.allow_delete
-                elif role.operate_dir_id == dst_dir.dir_id:
+
+    if request["param"]["dest_root"].startswith("/user"):
+        # query for user roles
+        roles = user.get_user_roles()
+        for role in roles:
+            if role.operate_dir_id == dst_dir.dir_id:
+                dst_allow_insert = role.allow_insert
+    elif request["param"]["dest_root"].startswith("/group"):
+        # query for user group roles
+        groups = user.get_groups()
+        for group in groups:
+            roles = group.get_roles()
+            for role in roles:
+                if role.operate_dir_id == dst_dir.dir_id:
                     dst_allow_insert = role.allow_insert
 
     if src_allow_read and src_allow_delete and dst_allow_insert:
         # query for file entries in source directory and target directory
-        src_subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == src_dir.dir_id).subquery()
-        src_file = db.session.query(File).filter(File.file_hash.in_(src_subq)
-                                             and File.file_name == request["param"]["file_name"]).first()
-        dst_subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dst_dir.dir_id).subquery()
-        dst_file = db.session.query(File).filter(File.file_hash.in_(dst_subq)
-                                                 and File.file_name == request["param"]["dest_name"]).first()
+        src_file = FileDir.query.filter(FileDir.dir_id == src_dir.dir_id,
+                                        FileDir.file_name == request["param"]["file_name"]).first()
+        dst_file = FileDir.query.filter(FileDir.dir_id == dst_dir.dir_id,
+                                        FileDir.file_name == request["param"]["dest_name"]).first()
         if src_file is not None and dst_file is None:
-            relation = FileDir.query.filter(FileDir.file_hash == src_file.file_hash and
-                                            FileDir.dir_id == src_dir.dir_id).one()
-            db.session.delete(relation)
-            new_relation = FileDir(dst_dir.dir_id, src_file.file_hash)
+            db.session.delete(src_file)
+            new_relation = FileDir(dst_dir.dir_id, src_file.file_hash, request["param"]["dest_name"])
             db.session.add(new_relation)
             db.session.commit()
             resp = jsonify({"status": code.ST_OK,
@@ -661,7 +687,7 @@ def mv_file(request, db):
 
     else:
         resp = jsonify({"status": code.ST_USER_NOT_ALLOWED,
-                        "info": "User doesn't have read permission",
+                        "info": "User doesn't have permission",
                         "data": {}})
         resp.status_code = 401
         return resp
@@ -674,7 +700,7 @@ def copy_file(request, db):
     :return:
     """
     if "token" not in request \
-            or not validate_request(request, "mv_file", {"dir_root": str, "file_name": str,
+            or not validate_request(request, "copy_file", {"dir_root": str, "file_name": str,
                                                          "dest_root": str, "dest_name": str}):
         resp = jsonify({"status": code.ST_INVALID_VALUE,
                         "info": "Request content is invalid",
@@ -707,8 +733,6 @@ def copy_file(request, db):
         for role in roles:
             if role.operate_dir_id == src_dir.dir_id:
                 src_allow_read = role.allow_read
-            elif role.operate_dir_id == dst_dir.dir_id:
-                dst_allow_insert = role.allow_insert
     elif request["param"]["dir_root"].startswith("/group"):
         # query for user group roles
         groups = user.get_groups()
@@ -717,21 +741,30 @@ def copy_file(request, db):
             for role in roles:
                 if role.operate_dir_id == src_dir.dir_id:
                     src_allow_read = role.allow_read
-                elif role.operate_dir_id == dst_dir.dir_id:
+
+    if request["param"]["dest_root"].startswith("/user"):
+        # query for user roles
+        roles = user.get_user_roles()
+        for role in roles:
+            if role.operate_dir_id == dst_dir.dir_id:
+                dst_allow_insert = role.allow_insert
+    elif request["param"]["dest_root"].startswith("/group"):
+        # query for user group roles
+        groups = user.get_groups()
+        for group in groups:
+            roles = group.get_roles()
+            for role in roles:
+                if role.operate_dir_id == dst_dir.dir_id:
                     dst_allow_insert = role.allow_insert
 
     if src_allow_read and dst_allow_insert:
         # query for file entries in source directory and target directory
-        src_subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == src_dir.dir_id).subquery()
-        src_file = db.session.query(File).filter(File.file_hash.in_(src_subq)
-                                             and File.file_name == request["param"]["file_name"]).first()
-        dst_subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dst_dir.dir_id).subquery()
-        dst_file = db.session.query(File).filter(File.file_hash.in_(dst_subq)
-                                                 and File.file_name == request["param"]["dest_name"]).first()
+        src_file = FileDir.query.filter(FileDir.dir_id == src_dir.dir_id,
+                                        FileDir.file_name == request["param"]["file_name"]).first()
+        dst_file = FileDir.query.filter(FileDir.dir_id == dst_dir.dir_id,
+                                        FileDir.file_name == request["param"]["dest_name"]).first()
         if src_file is not None and dst_file is None:
-            relation = FileDir.query.filter(FileDir.file_hash == src_file.file_hash and
-                                            FileDir.dir_id == src_dir.dir_id).one()
-            new_relation = FileDir(dst_dir.dir_id, src_file.file_hash)
+            new_relation = FileDir(dst_dir.dir_id, src_file.file_hash, request["param"]["dest_name"])
             db.session.add(new_relation)
             db.session.commit()
             resp = jsonify({"status": code.ST_OK,
@@ -767,7 +800,7 @@ def upload_file(request, db, upload_file):
     :return:
     """
     if "token" not in request \
-            or not validate_request(request, "read_file", {"dir_root": str, "file_name": str}):
+            or not validate_request(request, "upload_file", {"dir_root": str, "file_name": str}):
         resp = jsonify({"status": code.ST_INVALID_VALUE,
                         "info": "Request content is invalid",
                         "data": {}})
@@ -797,9 +830,8 @@ def upload_file(request, db, upload_file):
             if role.operate_dir_id == dir.dir_id:
                 if role.allow_insert:
                     # query for file entries in target directory
-                    subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                    file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                          and File.file_name == request["param"]["file_name"]).all()
+                    file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                FileDir.file_name == request["param"]["file_name"]).first()
                     if file is not None:
                         resp = jsonify({"status": code.ST_INVALID_FILE,
                                         "info": "Request file already exists",
@@ -808,13 +840,19 @@ def upload_file(request, db, upload_file):
                         return resp
                     else:
                         # caculate hash
-                        hash = sha256().update(upload_file).hexdigest()
-                        path = "/"+hash[0:2]+"/"+hash[2:4]+"/"+hash
-                        save_path = os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "/data", path)
-                        with open(save_path, 'wb') as dest:
-                            dest.write(file)
-                        new_file = File(hash, request["param"]["file_name"], path)
-                        db.session.add(new_file)
+                        hasher = sha256()
+                        hasher.update(upload_file)
+                        hash = hasher.hexdigest()
+                        save_path = os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "uploads", hash)
+
+                        new_file = File(hash, hash)
+                        real_file = File.query.filter(File.file_hash == hash).first()
+                        if real_file is None:
+                            with open(save_path, 'wb') as dest:
+                                dest.write(upload_file)
+                            db.session.add(new_file)
+                        new_relation = FileDir(dir.dir_id, hash, request["param"]["file_name"])
+                        db.session.add(new_relation)
                         db.session.commit()
                         resp = jsonify({"status": code.ST_OK,
                                         "info": "Request successful",
@@ -841,19 +879,36 @@ def upload_file(request, db, upload_file):
             roles = group.get_roles()
             for role in roles:
                 if role.operate_dir_id == dir.dir_id:
-                    if role.allow_read:
+                    if role.allow_insert:
                         # query for file entries in target directory
-                        subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                        file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                             and File.file_name == request["param"]["file_name"]).all()
-                        if file is None:
+                        file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                    FileDir.file_name == request["param"]["file_name"]).first()
+                        if file is not None:
                             resp = jsonify({"status": code.ST_INVALID_FILE,
-                                            "info": "Request file doesn't exist",
+                                            "info": "Request file already exists",
                                             "data": {}})
-                            resp.status_code = 404
+                            resp.status_code = 400
                             return resp
                         else:
-                            return send_from_directory("data", file.file_path)
+                            # caculate hash
+                            hasher = sha256()
+                            hasher.update(upload_file)
+                            hash = hasher.hexdigest()
+                            save_path = os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "uploads", hash)
+                            new_file = File(hash, hash)
+                            real_file = File.query.filter(File.file_hash == hash).first()
+                            if real_file is None:
+                                with open(save_path, 'wb') as dest:
+                                    dest.write(upload_file)
+                                db.session.add(new_file)
+                            new_relation = FileDir(dir.dir_id, hash, request["param"]["file_name"])
+                            db.session.add(new_relation)
+                            db.session.commit()
+                            resp = jsonify({"status": code.ST_OK,
+                                            "info": "Request successful",
+                                            "data": request["param"]})
+                            resp.status_code = 200
+                            return resp
 
                     else:
                         resp = jsonify({"status": code.ST_USER_NOT_ALLOWED,
@@ -906,9 +961,8 @@ def read_meta(request, db):
             if role.operate_dir_id == dir.dir_id:
                 if role.allow_read:
                     # query for file entries in target directory
-                    subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                    file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                         and File.file_name == request["file_name"]).first()
+                    file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                FileDir.file_name == request["param"]["file_name"]).first()
                     if file is None:
                         resp = jsonify({"status": code.ST_INVALID_FILE,
                                         "info": "Target file doesn't exist",
@@ -950,9 +1004,8 @@ def read_meta(request, db):
                 if role.operate_dir_id == dir.dir_id:
                     if role.allow_read:
                         # query for file entries in target directory
-                        subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                        file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                             and File.file_name == request["file_name"]).first()
+                        file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                    FileDir.file_name == request["param"]["file_name"]).first()
                         if file is None:
                             resp = jsonify({"status": code.ST_INVALID_FILE,
                                             "info": "Target file doesn't exist",
@@ -994,8 +1047,8 @@ def set_meta(request, db):
     :return:
     """
     if "token" not in request \
-            or not validate_request(request, "read_meta", {"dir_root": str, "file_name": str,
-                                                           "meta_key":str, "meta_val": object}):
+            or not validate_request(request, "set_meta", {"dir_root": str, "file_name": str,
+                                                           "meta_key": str, "meta_val": object}):
         resp = jsonify({"status": code.ST_INVALID_VALUE,
                         "info": "Request content is invalid",
                         "data": {}})
@@ -1025,9 +1078,8 @@ def set_meta(request, db):
             if role.operate_dir_id == dir.dir_id:
                 if role.allow_modify:
                     # query for file entries in target directory
-                    subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                    file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                         and File.file_name == request["param"]["file_name"]).first()
+                    file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                FileDir.file_name == request["param"]["file_name"]).first()
                     if file is None:
                         resp = jsonify({"status": code.ST_INVALID_FILE,
                                         "info": "Target file doesn't exist",
@@ -1036,12 +1088,14 @@ def set_meta(request, db):
                         return resp
                     else:
                         meta = db.session.query(MetaTable).filter(MetaTable.file_hash == file.file_hash
-                                                                  and MetaTable.key == request["param"]["meta_key"]).first()
+                                                                  and MetaTable.key == request["param"][
+                                                                      "meta_key"]).first()
                         if meta is not None:
-                            meta.value = request["meta_val"]
+                            meta.value = request["param"]["meta_val"]
                             db.session.commit()
                         else:
-                            new_meta = MetaTable(file.file_hash, request["param"]["meta_key"], request["param"]["meta_val"])
+                            new_meta = MetaTable(file.file_hash, request["param"]["meta_key"],
+                                                 request["param"]["meta_val"])
                             db.session.add(new_meta)
                             db.session.commit()
                         resp = jsonify({"status": code.ST_OK,
@@ -1071,10 +1125,8 @@ def set_meta(request, db):
                 if role.operate_dir_id == dir.dir_id:
                     if role.allow_modify:
                         # query for file entries in target directory
-                        subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id).subquery()
-                        file = db.session.query(File).filter(File.file_hash.in_(subq)
-                                                             and File.file_name == request["param"][
-                                                                 "file_name"]).first()
+                        file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                    FileDir.file_name == request["param"]["file_name"]).first()
                         if file is None:
                             resp = jsonify({"status": code.ST_INVALID_FILE,
                                             "info": "Target file doesn't exist",

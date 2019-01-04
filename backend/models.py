@@ -6,6 +6,7 @@ import datetime
 
 database = SQLAlchemy()
 
+
 class User(database.Model):
     __tablename__ = "user"
     user_id = database.Column(database.Integer,
@@ -31,13 +32,14 @@ class User(database.Model):
         # read 32 bytes(256bit) of random secret, then convert to hexadecimal format
         self.token = Random.new().read(32).hex()
         self.token_expire = datetime.datetime.utcnow() + datetime.timedelta(days=1)
-        return base64.encode(self.username + ":" + self.token)
+        database.session.commit()
+        return base64.b64encode((self.username + ":" + self.token).encode("utf-8")).decode("utf-8")
 
     def validate_token(self, token):
         if datetime.datetime.utcnow() > self.token_expire:
             return False
         try:
-            token = base64.decode(token).split(":")[1]
+            token = base64.b64decode(token).decode("utf-8").split(":")[1]
         except KeyError:
             return False
         if self.token == token:
@@ -92,8 +94,9 @@ class Directory(database.Model):
 
     parent = database.relationship("Directory", backref=database.backref("children", remote_side=dir_id))
 
-    def __init__(self, path):
+    def __init__(self, path, parent_id):
         self.path = path
+        self.parent_id = parent_id
 
     def __repr__(self):
         return "<Directory(dir_id='%d', path='%s')>" % (self.dir_id, self.path)
@@ -105,7 +108,7 @@ class Role(database.Model):
                               primary_key=True,
                               nullable=False,
                               autoincrement=True)
-    role_name = database.Column(database.String(256), unique=True, nullable=False)
+    role_name = database.Column(database.String(256), nullable=False)
     operate_dir_id = database.Column(database.Integer, database.ForeignKey(Directory.dir_id, ondelete="CASCADE"))
     allow_insert = database.Column(database.Boolean, nullable=False)
     allow_read = database.Column(database.Boolean, nullable=False)
@@ -134,13 +137,11 @@ class File(database.Model):
     file_hash = database.Column(database.String(256),
                                 primary_key=True,
                                 nullable=False)
-    file_name = database.Column(database.String(256), nullable=False)
     file_path = database.Column(database.String(512), nullable=False)
     file_ref_count = database.Column(database.Integer)
 
-    def __init__(self, file_hash, file_name, file_path):
+    def __init__(self, file_hash, file_path):
         self.file_hash = file_hash
-        self.file_name = file_name
         self.file_path = file_path
         self.file_ref_count = 0
 
@@ -177,14 +178,16 @@ class FileDir(database.Model):
     id = database.Column(database.Integer, primary_key=True)
     dir_id = database.Column(database.Integer, database.ForeignKey(Directory.dir_id, ondelete="CASCADE"))
     file_hash = database.Column(database.String(256), database.ForeignKey(File.file_hash, ondelete="CASCADE"))
+    file_name = database.Column(database.String(256), nullable=False)
 
     # create relationships
     file = database.relationship(File, backref=database.backref("file_dir", passive_deletes=True))
     dir = database.relationship(Directory, backref=database.backref("file_dir", passive_deletes=True))
 
-    def __init__(self, dir_id, file_hash):
+    def __init__(self, dir_id, file_hash, file_name):
         self.dir_id = dir_id
         self.file_hash = file_hash
+        self.file_name = file_name
 
 
 class UserRole(database.Model):

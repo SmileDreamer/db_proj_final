@@ -19,7 +19,7 @@ def validate_request(json, action, params: dict):
 
 def get_user(token):
     try:
-        username = base64.decode(request["token"]).split(":")[0]
+        username = base64.b64decode(token.encode("utf-8")).decode("utf-8").split(":")[0]
     except:
         return None
     return User.query.filter_by(username=username).first()

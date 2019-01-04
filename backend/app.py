@@ -18,7 +18,7 @@ def app_init():
         FOR EACH ROW
         BEGIN
             UPDATE file SET file.file_ref_count = file.file_ref_count + 1
-            WHERE file.file_hash = file_dir.file_hash;
+            WHERE file.file_hash = NEW.file_hash;
         END
     """)
     database.get_engine(app=app).execute("""
@@ -27,7 +27,7 @@ def app_init():
         FOR EACH ROW
         BEGIN
             UPDATE file SET file.file_ref_count = file.file_ref_count - 1
-            WHERE file.file_hash = file_dir.file_hash;
+            WHERE file.file_hash = OLD.file_hash;
         END
 
     """)
@@ -46,9 +46,13 @@ def app_index():
     return redirect("/login")
 
 
-@app.route("/login")
+@app.route("/login", methods=['GET', 'POST'])
 def app_login():
-    req = request.get_json(silent=True)
+    json_files = request.files.getlist("json")
+    req = None
+    for f in json_files:
+        if f.filename == "action":
+            req = json.loads(f.read().decode('utf-8'))
     # request is not valid json
     if req is None:
         resp = jsonify({"status": code.ST_INVALID_VALUE,
@@ -88,9 +92,13 @@ def app_login():
     return resp
 
 
-@app.route("/file")
+@app.route("/file", methods=['GET', 'POST'])
 def app_file_operation():
-    req = json.load(request.files["action"].read(), 'utf-8')
+    json_files = request.files.getlist("json")
+    req = None
+    for f in json_files:
+        if f.filename == "action":
+            req = json.loads(f.read().decode('utf-8'))
 
     # request is not valid json
     if req is None:
@@ -119,16 +127,19 @@ def app_file_operation():
         return file.create_dir(req, database)
     elif req["action"] == "read_file":
         return file.read_file(req, database)
+    elif req["action"] == "del_file":
+        return file.del_file(req, database)
     elif req["action"] == "mv_file":
         return file.mv_file(req, database)
     elif req["action"] == "copy_file":
         return file.copy_file(req, database)
     elif req["action"] == "upload_file":
         if "file" in request.files:
+            # NOTE: only the first file will be read
             return file.upload_file(req, database, request.files["file"].read())
         else:
             resp = jsonify({"status": code.ST_INVALID_VALUE,
-                            "info": "Request content is invalid",
+                            "info": "Request content is invalid, file stream not found",
                             "data": {}})
             resp.status_code = 400
             return resp
@@ -145,9 +156,13 @@ def app_file_operation():
         return resp
 
 
-@app.route("/manage")
+@app.route("/manage", methods=['GET', 'POST'])
 def app_manage_operation():
-    req = request.get_json(silent=True)
+    json_files = request.files.getlist("json")
+    req = None
+    for f in json_files:
+        if f.filename == "action":
+            req = json.loads(f.read().decode('utf-8'))
     # request is not valid json
     if req is None:
         resp = jsonify({"status": code.ST_INVALID_VALUE,
