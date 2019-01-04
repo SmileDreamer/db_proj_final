@@ -94,8 +94,8 @@ class Loginwindow(QtWidgets.QWidget):
         ]
         #登陆处理
         try:
-            #r = requests.post("http://172.18.95.74:8002/login", files=files)
-            #contect = r.content
+            r = requests.post("http://172.18.95.74:8002/login", files=files)
+            contect = r.content
 
             # 登陆成功
             self.hide()

@@ -27,9 +27,16 @@ class MainWindow(QtWidgets.QWidget):
         self.textEdit.setObjectName("textEdit")
 
         # 文件列表
-        self.listView = QtWidgets.QListView(self.centralwidget)
+        self.listView = QtWidgets.QListWidget(self.centralwidget)
         self.listView.setGeometry(QtCore.QRect(20, 60, 761, 681))
         self.listView.setObjectName("listView")
+
+        # load test
+        self.listView.addItem("file_1")
+        self.listView.addItem("file_2")
+        self.listView.addItem("file_3")
+        #self.listView.doubleClicked(i).
+        # load test
 
         # 文件属性
         self.textEdit_2 = QtWidgets.QTextEdit(self.centralwidget)
