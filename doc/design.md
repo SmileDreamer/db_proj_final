@@ -30,7 +30,7 @@ files = [
                                       "param": {"dir_root": "/user/root", "file_name": "paper-othello.pdf"}}), 'application/json')),
 ]
 
-r = requests.post("http://127.0.0.1:8002/upload_file", files=files)
+r = requests.post("http://127.0.0.1:8002/file", files=files)
 print(r.content)
 ```
 #####用户登录 /login: 

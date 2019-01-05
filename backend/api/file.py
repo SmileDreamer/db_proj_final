@@ -508,19 +508,16 @@ def del_file(request, db):
             if role.operate_dir_id == dir.dir_id:
                 if role.allow_delete:
                     # query for file entries in target directory
-                    subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id,
-                                                FileDir.file_name == request["param"]["file_name"]).subquery()
-                    file = db.session.query(File).filter(File.file_hash.in_(subq)).first()
+                    file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                         FileDir.file_name == request["param"]["file_name"]).first()
+
                     if file is not None:
-                        # TODO: Add atomic file clean up procedure when ref count has decreased to 0
-                        if file.file_ref_count == 1:
-                            real_file = File.query.filter(File.file_hash == file.file_hash).first()
+                        real_file = File.query.filter(File.file_hash == file.file_hash).first()
+                        if real_file.file_ref_count == 1:
                             os.remove(
                                 os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "uploads", real_file.file_path))
                             db.session.delete(real_file)
-                        relation = FileDir.query.filter(FileDir.file_hash == file.file_hash,
-                                                        FileDir.dir_id == dir.dir_id).one()
-                        db.session.delete(relation)
+                        db.session.delete(file)
                         db.session.commit()
                         resp = jsonify({"status": code.ST_OK,
                                         "info": "Request successful",
@@ -554,21 +551,17 @@ def del_file(request, db):
                 if role.operate_dir_id == dir.dir_id:
                     if role.allow_delete:
                         # query for file entries in target directory
-                        subq = db.session.query(FileDir.file_hash).filter(FileDir.dir_id == dir.dir_id,
-                                                                          FileDir.file_name == request["param"][
-                                                                              "file_name"]).subquery()
-                        file = db.session.query(File).filter(File.file_hash.in_(subq)).first()
+                        file = FileDir.query.filter(FileDir.dir_id == dir.dir_id,
+                                                    FileDir.file_name == request["param"]["file_name"]).first()
+
                         if file is not None:
-                            # TODO: Add atomic file clean up procedure when ref count has decreased to 0
-                            if file.file_ref_count == 1:
-                                real_file = File.query.filter(File.file_hash == file.file_hash).first()
+                            real_file = File.query.filter(File.file_hash == file.file_hash).first()
+                            if real_file.file_ref_count == 1:
                                 os.remove(
                                     os.path.join(current_app.config['UPLOADED_ITEMS_DEST'], "uploads",
                                                  real_file.file_path))
                                 db.session.delete(real_file)
-                            relation = FileDir.query.filter(FileDir.file_hash == file.file_hash,
-                                                            FileDir.dir_id == dir.dir_id).one()
-                            db.session.delete(relation)
+                            db.session.delete(file)
                             db.session.commit()
                             resp = jsonify({"status": code.ST_OK,
                                             "info": "Request successful",
