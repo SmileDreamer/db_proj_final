@@ -302,6 +302,9 @@ def create_dir(request, db):
                                     role.allow_insert, role.allow_read,
                                     role.allow_modify, role.allow_delete)
                     db.session.add(new_role)
+                    db.session.flush()
+                    new_relation = UserRole(user.user_id, new_role.role_id)
+                    db.session.add(new_relation)
                     db.session.commit()
                     resp = jsonify({"status": code.ST_OK,
                                     "info": "Request successful",
@@ -347,6 +350,9 @@ def create_dir(request, db):
                                         role.allow_insert, role.allow_read,
                                         role.allow_modify, role.allow_delete)
                         db.session.add(new_role)
+                        db.session.flush()
+                        new_relation = UserRole(user.user_id, new_role.role_id)
+                        db.session.add(new_relation)
                         db.session.commit()
                         resp = jsonify({"status": code.ST_OK,
                                         "info": "Request successful",
