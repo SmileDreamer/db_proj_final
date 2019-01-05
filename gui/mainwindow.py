@@ -227,7 +227,7 @@ class MainWindow(QtWidgets.QWidget):
         self.get_list_from_dir()
 
     def upload_file(self):
-        fullname = str(QFileDialog.getOpenFileName(self, 'Upload file'))
+        fullname = str(QFileDialog.getOpenFileName(self, 'Upload file')[0])
         if len(fullname) == 0:
             return
         splited_name = fullname.split('/')
@@ -259,7 +259,7 @@ class MainWindow(QtWidgets.QWidget):
         self.get_list_from_dir()
 
     def download_file(self):
-        fullname = str(QFileDialog.getSaveFileName(self,'Download to:'))
+        fullname = str(QFileDialog.getSaveFileName(self,'Download to:', self.selected_name[0]))
         if len(fullname) == 0:
             return
         splited_name = fullname.split('/')
@@ -290,6 +290,9 @@ class MainWindow(QtWidgets.QWidget):
         QMessageBox.information(self, "提示", contect['info'], QMessageBox.Yes)
 
     def delete_file(self):
+        reply = QMessageBox.information(self, 'Confirm', "确认要删除吗？", QMessageBox.Yes | QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return
         files = [
             ('json', ("action", json.dumps({
                 "action": "del_file",
