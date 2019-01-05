@@ -186,19 +186,21 @@ class MainWindow(QtWidgets.QWidget):
         # 文件夹
         if selected_filename[0] == '/':
             if selected_filename == '/..':
-                current_dir = "/"
-                splited = selected_filename.split("/")
+                current_dir = ""
+                splited = self.current_dir.split("/")
                 for dir_index in range(0,len(splited)-1):
                     dir = splited[dir_index]
                     if len(dir) == 0:
                         continue
-                    current_dir += (dir + "/")
+                    current_dir += ("/" + dir)
             else:
                 current_dir = selected_filename
             self.dirEdit.setText(current_dir)
             self.get_list_from_dir()
             return
-        pass
+        else:
+        # 文件
+            self.download_file()
 
     def create_dir(self):
         dir_name = self.naming.text()
@@ -247,19 +249,19 @@ class MainWindow(QtWidgets.QWidget):
                       'application/json'))
         ]
         try:
-            r = requests.post("http://172.18.95.74:8002/upload_file", files=files)
+            r = requests.post("http://172.18.95.74:8002/file", files=files)
         except Exception as err:
             print(format(err))
             return
-        contect = json.loads(r.content)
-        if contect['status'] != 0:
-            QMessageBox.warning(self, "错误", contect['info'], QMessageBox.Yes)
+        contect = r.content
+        if r.status_code != 200:
+            QMessageBox.warning(self, "错误", r.reason, QMessageBox.Yes)
             return
         QMessageBox.information(self, "提示", contect['info'], QMessageBox.Yes)
         self.get_list_from_dir()
 
     def download_file(self):
-        fullname = str(QFileDialog.getSaveFileName(self,'Download to:', self.selected_name[0]))
+        fullname = str(QFileDialog.getSaveFileName(self,'Download to:', self.selected_name)[0])
         if len(fullname) == 0:
             return
         splited_name = fullname.split('/')
@@ -278,16 +280,17 @@ class MainWindow(QtWidgets.QWidget):
         try:
             r = requests.post("http://172.18.95.74:8002/file", files=files)
         except Exception as err:
+            a = err
             print(format(err))
             return
-        contect = json.loads(r.content)
-        if contect['status'] != 0:
-            QMessageBox.warning(self, "错误", contect['info'], QMessageBox.Yes)
+        if r.status_code != 200:
+            QMessageBox.warning(self, "错误", str(r.status_code), QMessageBox.Yes)
             return
+        #contect = r.text
         file = open(fullname, 'wb')
-        # write
+        file.write(r._content)
         file.close()
-        QMessageBox.information(self, "提示", contect['info'], QMessageBox.Yes)
+        QMessageBox.information(self, "提示", "下载成功！", QMessageBox.Yes)
 
     def delete_file(self):
         reply = QMessageBox.information(self, 'Confirm', "确认要删除吗？", QMessageBox.Yes | QMessageBox.No)
